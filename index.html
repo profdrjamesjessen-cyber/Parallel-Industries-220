@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PI220 OS Interface</title>
+
+<style>
+/* =========================
+   GLOBAL STYLES
+========================= */
+body {
+    margin: 0;
+    font-family: monospace;
+    background: #000;
+    color: #00ff66;
+    height: 100vh;
+    display: flex;
+    flex-direction: column; /* Stack content + console */
+    overflow: auto;       /* hidden dont let page scroll */
+    position: relative;
+    box-sizing: border-box;
+}
+
+.highlight-email {
+    background-color: #00ff66;
+    color: #000;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-weight: bold;
+}
+
+/* =========================
+   LOADING SCREEN
+========================= */
+#loadingScreen {
+    position: fixed;
+    inset: 0;
+    background: black;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    z-index: 9999;
+}
+
+/* =========================
+   MAIN UI
+========================= */
+#mainUI {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    height: 100%;
+    width: 100%;
+}
+
+/* =========================
+   CONTENT AREA
+========================= */
+#content {
+    flex: 1 1 auto; /* grows, shrinks, fills remaining space */
+    padding: 20px;
+    overflow-y: auto;
+    min-height: 0;  /* ensures flex scroll works */
+}
+
+/* =========================
+   CONSOLE PANEL
+========================= */
+#consolePanel {
+    height: 220px;
+    min-height: 220px;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 10px;
+    border-top: 1px solid #00ff66;
+    background: #000;
+    position: relative; /* z-index works */
+    z-index: 10;        /* always above glyph rain */
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+#commandInput {
+    width: 100%;
+    padding: 10px;
+    background: black;
+    color: #00ff66;
+    border: none;
+    border-top: 1px solid #00ff66;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+/* =========================
+   MENU
+========================= */
+#menuBar {
+    padding: 10px;
+    border-bottom: 1px solid #00ff66;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+#menuBar span {
+    margin: 0 10px;
+    cursor: pointer;
+}
+
+#menuBar span:hover {
+    background: #00ff66;
+    color: #000;
+}
+
+/* =========================
+   PROJECT BOX
+========================= */
+.project {
+    border: 1px solid #00ff66;
+    padding: 10px;
+    margin: 10px 0;
+    cursor: pointer;
+}
+
+.project:hover {
+    background: #001a0a;
+}
+
+/* =========================
+   GRID ENGINE
+========================= */
+#gridBox {
+    display: grid;
+    grid-template-columns: repeat(30, 12px);
+    grid-template-rows: repeat(30, 12px);
+    gap: 0;
+    width: max-content;
+    margin: 10px auto;
+}
+
+.cell {
+    width: 12px;
+    height: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    line-height: 12px;
+    font-family: monospace;
+    color: #00ff66;
+}
+
+.panel {
+    font-weight: bold;
+    text-shadow: 0 0 4px #00ff66;
+}
+
+/* =========================
+   ALIEN SYNTAX GLYPH RAIN
+========================= */
+#glyphLayer {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;   /* BELOW console */
+    overflow: hidden;
+    opacity: 0.8;
+}
+
+.glyph {
+    position: absolute;
+    color: #00ff66;
+    font-size: 14px;
+    animation: fall linear infinite;
+    opacity: 0.9;
+    text-shadow: 0 0 5px #00ff66;
+}
+
+@keyframes fall {
+    0% { transform: translateY(-10vh); opacity: 0; }
+    10% { opacity: 0.4; }
+    100% { transform: translateY(110vh); opacity: 0; }
+}
+
+/* =========================
+   MOBILE OPTIMIZATION
+========================= */
+@media(max-width:600px){
+    #content {
+        padding: 10px;
+        font-size: 13px;
+    }
+
+    #consolePanel {
+        height: 180px;
+        min-height: 180px;
+        max-height: 180px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div id="loadingScreen">
+<h2>INITIALIZING PI220...</h2>
+<p id="bootText">BOOT SEQUENCE</p>
+</div>
+
+<div id="mainUI">
+<div id="glyphLayer"></div>
+
+<div id="menuBar">
+<span onclick="loadSection('HOME')">HOME</span>
+<span onclick="loadSection('PROJECTS')">PROJECTS</span>
+<span onclick="loadSection('ABOUT')">ABOUT</span>
+<span onclick="loadSection('CONTACT')">CONTACT</span>
+<span onclick="loadSection('PASSPORT')">PASSPORT</span>
+</div>
+
+<div id="content">SYSTEM READY</div>
+<div id="consolePanel"></div>
+
+<input id="commandInput" placeholder="> /help" onkeydown="runCommand(event)">
+
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+   
+
+/* =========================
+   GLYPH RAIN SYSTEM FIX
+========================= */
+
+const glyphLayer = document.getElementById("glyphLayer");
+
+const glyphChars = [
+
+"◉",
+"▲",
+"◆",
+"▼",
+"■",
+"∞",
+"✦",
+"✧",
+"⬢",
+"⬡"
+
+
+];
+
+function spawnGlyph(){
+
+    const g = document.createElement("div");
+    g.className = "glyph";
+    g.textContent = glyphChars[Math.floor(Math.random()*glyphChars.length)];
+
+    g.style.left = Math.random() * 100 + "vw";
+    g.style.animationDuration = (3 + Math.random()*5) + "s";
+    g.style.fontSize = (10 + Math.random()*20) + "px";
+
+    glyphLayer.appendChild(g);
+
+    setTimeout(()=>{
+        g.remove();
+    }, 8000);
+}
+
+/* START RAIN LOOP */
+setInterval(spawnGlyph, 120);
+
+
+const content=document.getElementById("content");
+const consolePanel=document.getElementById("consolePanel");
+const loadingScreen=document.getElementById("loadingScreen");
+const mainUI=document.getElementById("mainUI");
+const bootText=document.getElementById("bootText");
+
+/* LOG */
+function log(t){
+let d=document.createElement("div");
+d.textContent="> "+t;
+consolePanel.appendChild(d);
+consolePanel.scrollTop=consolePanel.scrollHeight;
+}
+
+function logWithGlyphs(text){
+    // Normal console log
+    log(text);
+
+    // Add mini glyph rain behind this message
+    const glyphChars = ["◉","▲","◆","▼","■","∞","✦","✧","⬢","⬡"];
+    const panel = consolePanel;
+    for(let i=0;i<5;i++){ // 5 mini glyphs
+        const g = document.createElement("div");
+        g.className = "glyph";
+        g.textContent = glyphChars[Math.floor(Math.random()*glyphChars.length)];
+        g.style.position = "absolute";
+        g.style.left = Math.random()*panel.clientWidth + "px";
+        g.style.top = (panel.scrollTop + Math.random()*30) + "px";
+        g.style.fontSize = (10 + Math.random()*12) + "px";
+        g.style.opacity = 0.6;
+        g.style.pointerEvents = "none";
+        panel.appendChild(g);
+        setTimeout(()=>g.remove(), 2000);
+    }
+}
+
+/* SYSTEM INFO */
+function systemInfo(){
+let now=new Date();
+
+log("WELCOME TO PARALLEL INDUSTRIES 220 CORPORATION");
+log("SUBSIDIARY PUBLIC SYSTEM");
+log("UNDER DEVELOPMENT. ALIEN SYNTAX : MATRIX INSTALLED.");
+log("WEBSITE DESIGNED AND UNDER DEVELOPMENT BY PROF DR JESSE JESSEN. 2026.");
+
+log("DATE: "+now.toLocaleDateString());
+log("TIME: "+now.toLocaleTimeString());
+log("YEAR: "+now.getFullYear());
+
+log("PLATFORM: "+navigator.platform);
+log("LANGUAGE: "+navigator.language);
+
+if(navigator.geolocation){
+navigator.geolocation.getCurrentPosition(pos=>{
+log("LOCATION: LAT "+pos.coords.latitude.toFixed(2)+" / LON "+pos.coords.longitude.toFixed(2));
+});
+}
+}
+
+/* BOOT */
+const bootSteps=[
+"CHECKING CORE FILES...",
+"LOADING PROJECT DATABASE...",
+"INITIALIZING CONSOLE...",
+"SYNCING PI220 ARCHITECTURE...",
+"STARTING INTERFACE..."
+];
+
+let i=0;
+let boot=setInterval(()=>{
+if(i<bootSteps.length){
+bootText.textContent=bootSteps[i];
+i++;
+}else{
+clearInterval(boot);
+loadingScreen.style.display="none";
+mainUI.style.display="flex";
+loadSection("HOME");
+systemInfo();
+log("SYSTEM ONLINE");
+}
+},600);
+
+/* LOGO */
+const LOGO_URL="https://i.ibb.co/2104y6QV/391-PARALLEL-INDUSTRIES-220-LEGAL-EXECUTIONS.jpg";
+
+/* FULL PROJECT DATABASE (YOUR ORIGINAL) */
+const projects=[
+
+{name:"PARALLEL INDUSTRIES 220 CORE",serial:"PI220-391-CORE-2026",architecture:"Unified orchestration architecture controlling all systems and subsystems.",principles:"System recursion, synchronization, autonomous governance.",subsystems:"Core Kernel, Decision Engine, Sync Layer, Monitoring Grid",flow:"Global input → orchestration → execution",io:"INPUT: all system signals | OUTPUT: unified control logic",integration:"Root controller of all PI220 architecture",value:"Civilization-level operating core"},
+
+{name:"ALIEN SYNTAX MATRIX",serial:"PI220-391-ALN-2026",architecture:"Symbolic intelligence advanced processing architecture framework.",principles:"Recursive grammar-based parallel quantum computation.",subsystems:"Parser Engine, Semantic Core, Logic Resolver",flow:"Symbolic architecture → Transformation and mutation → resolved status",io:"INPUT: Raw data | OUTPUT: intelligence synthesis",integration:"Linked directly to CORE",value:"Advanced cognitive layer"},
+
+{name:"391 PARALLEL SERVERS",serial:"PI220-391-SRV-2026",architecture:"Distributed planetary-scale compute infrastructure.",principles:"Parallel execution, redundancy, scalability.",subsystems:"Node clusters, Load balancing system, Sync protocol",flow:"Task distribution → parallel processing → result aggregation",io:"INPUT: computational workloads | OUTPUT: processed results",integration:"System backbone infrastructure",value:"Compute backbone"},
+
+{name:"PCTM-500",serial:"PI220-391-PCTM500-2026",architecture:"Photonic chemical thermodynamic dual energy conversion plant.",principles:"Photon-energy conversion cycles.",subsystems:"Photon Chamber, Reactor Core, Thermal Amplifier",flow:"Photon input → energy conversion → dual output",io:"INPUT: photonic energy | OUTPUT: power generation",integration:"Feeds all systems",value:"Primary energy generator"},
+
+{name:"PCEEP",serial:"PI220-391-PCEEP-2026",architecture:"Energy conversion and hydrogen refinery system.",principles:"Energy storage and redistribution.",subsystems:"Hydrogen Cells, Storage Grid",flow:"Energy → stabilization → redistribution",io:"INPUT: raw energy | OUTPUT: dual stable output",integration:"Supports PCTM-500",value:"Dual energy system"},
+
+{name:"HFAT-X10",serial:"PI220-391-HFATX10-2026",architecture:"High-frequency cross domain funneling energy hull amplification system.",principles:"Energy stabilization via frequency control.",subsystems:"Thermal field emitters",flow:"Energy → modulation → amplification",io:"INPUT: Energy load | OUTPUT: aerodynamic energy amplification",integration:"Cross domain systems",value:"Transportation system"},
+
+{name:"AFAT-X10",serial:"PI220-391-AFATX10-2026",architecture:"Advanced aerodynamic propulsion field generator system.",principles:"Energy thrust conversion.",subsystems:"Field core propulsion matrix",flow:"Energy → thrust + amplification",io:"INPUT: energy | OUTPUT: propulsion force",integration:"Engine core",value:"Propulsion system"},
+
+{name:"TPSHS / LUNAR NETWORK",serial:"PI220-391-TPSHS-LN-2026",architecture:"Lunar habitat + communication grid.",principles:"Modular extraterrestrial habitation.",subsystems:"Habitat modules, network grid",flow:"Resources → habitation",io:"INPUT: resources | OUTPUT: livable system",integration:"NASAF interface",value:"Lunar colonization system"},
+
+{name:"X2M",serial:"PI220-391-X2M-2026",architecture:"Multi-dimensional kinetic amplification engine.",principles:"Predictive energy modeling systems.",subsystems:"Simulation core",flow:"Input variables → projection",io:"INPUT: Energy | OUTPUT: Predictive amplified model",integration:"Cross domain",value:"Kinetic prediction engine"},
+
+{name:"EXERTUM X",serial:"PI220-391-EXTX-2026",architecture:"Experimental validation environment.",principles:"Controlled system testing.",subsystems:"Test engine",flow:"Input → test → results",io:"INPUT: experiment | OUTPUT: validation",integration:"PI220 system",value:"Validation layer"},
+
+{name:"STARFORCE GRID",serial:"PI220-391-SF-2026",architecture:"Planetary defense energy grid.",principles:"Protection and response systems.",subsystems:"Shield grid",flow:"Threat → defense response",io:"INPUT: threat | OUTPUT: defense activation",integration:"PCTM powered",value:"Security layer"},
+
+{name:"NASAF INTERFACE",serial:"PI220-391-NASAF-2026",architecture:"Aerospace command interface.",principles:"Human-system control layer.",subsystems:"Command console",flow:"Command → execution",io:"INPUT: instructions | OUTPUT: system control",integration:"STARSHIP",value:"Command system"},
+
+{name:"IRAS X",serial:"PI220-391-IRASX-2026",architecture:"Infrared detection system.",principles:"Thermal scanning and analysis.",subsystems:"Sensors",flow:"Scan → interpretation",io:"INPUT: infrared data | OUTPUT: analysis",integration:"CORE",value:"Detection system"},
+
+{name:"XO-SERIES",serial:"PI220-391-XO-2026",architecture:"System experimentation framework.",principles:"Universal scientific interoperability.",subsystems:"Protocol engine",flow:"Data → unified experimentation",io:"INPUT: system data | OUTPUT: unified system",integration:"ALL SYSTEMS",value:"Experimental backbone"},
+
+{name:"PHOTONIC ENGINE SYSTEM",serial:"PI220-391-PHEN-2026",architecture:"High-density photonic energy manipulation and conversion engine.",principles:"Light-field compression, photon amplification, energy structuring.",subsystems:"Photon core chamber, wave guide matrix, energy condenser, output regulator",flow:"Photon input → compression → amplification → output",io:"INPUT: photonic streams | OUTPUT: structured energy fields",integration:"Linked to PCTM-500 and PCEEP",value:"Next-gen energy engine"}
+
+];
+
+/* NAVIGATION */
+window.loadSection=function(sec){
+
+if(sec==="HOME"){
+    content.innerHTML=`
+    <div style="text-align:center">
+        <img src="${LOGO_URL}" style="width:220px;border:1px solid #00ff66;padding:10px">
+        <h2>PARALLEL INDUSTRIES 220</h2>
+        <p>Unified civilization architecture system</p>
+        <div style="height:60px;"></div> <!-- Two-step vertical spacing -->
+        <canvas id="sciFiCarousel" style="border:1px solid #00ff66;"></canvas>
+    </div>
+    `;
+
+    const images = [
+        "https://i.ibb.co/yByv60Ww/PARALLEL-INDUSTRIES-220-391.jpg",
+        "https://i.ibb.co/Kc2z3mQB/PARALLEL-INDUSTRIES-220-391-LETHAL-ACTION.jpg",
+        "https://i.ibb.co/yBmmLNss/PARALLEL-INDUSTRIES-220-391-PROF-DR-JESSE-JESSEN-AND-PROF-DR-BILL-GATES-2026.jpg",
+        "https://i.ibb.co/4wsbXbxt/PARALLEL-INDUSTRIES-220-391-MASTER-DIPLOMA-ETC-KIDS-2026.jpg",
+        "https://i.ibb.co/p6N9pdBq/391-PARALLEL-INDUSTRIES-220-MICROSOFT-AND-INTEL.jpg",
+        "https://i.ibb.co/SX0CK2Cp/391-PARALLEL-INDUSTRIES-220.jpg",
+        "https://i.ibb.co/M5js4CPS/PARALLEL-INDUSTRIES-220-391-PROF-DR-JESSE-JESSEN.jpg",
+        "https://i.ibb.co/0RFZZcLt/PARALLEL-INDUSTRIES-220-391-MICROSOFT-INTEL-LAYER-BY-LAYER.jpg"
+    ];
+
+    const canvas = document.getElementById("sciFiCarousel");
+    const ctx = canvas.getContext("2d");
+
+    // Maximum width 50% of viewport
+    const maxWidth = window.innerWidth * 0.5;
+    canvas.width = maxWidth;
+    canvas.height = 400;
+
+    const gridFragments = 30;
+    const imgObjects = [];
+    let currentIndex = 0;
+
+    // Preload images
+    images.forEach(src=>{
+        const img = new Image();
+        img.src = src;
+        imgObjects.push(img);
+    });
+
+    function drawImageSequential(img, callback){
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+
+        const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+        const imgWidth = img.width * scale;
+        const imgHeight = img.height * scale;
+        const offsetX = (canvas.width - imgWidth)/2;
+        const offsetY = (canvas.height - imgHeight)/2;
+
+        const fragmentWidth = imgWidth / gridFragments;
+        const fragmentHeight = fragmentWidth * (img.height / img.width);
+
+        const cols = Math.ceil(imgWidth / fragmentWidth);
+        const rows = Math.ceil(imgHeight / fragmentHeight);
+
+        const order = [];
+        for(let r=0;r<rows;r++){
+            for(let c=0;c<cols;c++){
+                order.push({
+                    sx: c * (img.width / cols),
+                    sy: r * (img.height / rows),
+                    sw: img.width / cols,
+                    sh: img.height / rows,
+                    dx: offsetX + c*fragmentWidth,
+                    dy: offsetY + r*fragmentHeight,
+                    dw: fragmentWidth,
+                    dh: fragmentHeight
+                });
+            }
+        }
+
+        shuffle(order);
+
+        let step = 0;
+
+        function drawStep(){
+            for(let i=0;i<5;i++){
+                if(step >= order.length){
+                    // Fully assembled, draw final full image without grid/glow
+                    ctx.clearRect(0,0,canvas.width,canvas.height);
+                    ctx.drawImage(img, offsetX, offsetY, imgWidth, imgHeight);
+                    if(callback) callback();
+                    return;
+                }
+                const cell = order[step];
+                const jitterX = (Math.random()-0.5)*2;
+                const jitterY = (Math.random()-0.5)*2;
+
+                ctx.save();
+                ctx.shadowColor = "#00ff66";
+                ctx.shadowBlur = 4; // subtle glow
+                ctx.globalAlpha = 0.8;
+                ctx.drawImage(img, cell.sx, cell.sy, cell.sw, cell.sh, cell.dx+jitterX, cell.dy+jitterY, cell.dw, cell.dh);
+                ctx.restore();
+
+                step++;
+            }
+            requestAnimationFrame(drawStep);
+        }
+        drawStep();
+    }
+
+    function shuffle(array){
+        for(let i=array.length-1;i>0;i--){
+            const j = Math.floor(Math.random()*(i+1));
+            [array[i],array[j]]=[array[j],array[i]];
+        }
+    }
+
+    function showNextImage(){
+        currentIndex = (currentIndex + 1) % imgObjects.length;
+        drawImageSequential(imgObjects[currentIndex], ()=>{
+            setTimeout(showNextImage, 5000); // slower rotation: 5s per image fully visible
+        });
+    }
+
+    // Initial draw
+    drawImageSequential(imgObjects[currentIndex], ()=>{
+        setTimeout(showNextImage, 5000);
+    });
+}
+
+
+else if(sec==="PROJECTS"){
+content.innerHTML="<h2>PROJECT DATABASE</h2>";
+
+projects.forEach((p,i)=>{
+content.innerHTML+=`
+<div class="project" onclick="openProject(${i})">
+<b>${p.name}</b><br>
+<span>${p.architecture}</span><br><br>
+<small>
+PRINCIPLES: ${p.principles}<br>
+INTEGRATION: ${p.integration}<br>
+VALUE: ${p.value}
+</small>
+</div>`;
+});
+}
+
+
+else if(sec==="ABOUT"){
+    content.innerHTML=`
+    <h2>🌐 MISSION · VISION · VALUES</h2>
+
+    <hr>
+
+    <h2>🚀 MISSION</h2>
+    <p>Parallel Industries 220 exists to engineer unified industrial systems across energy, computation, mobility and spatial architecture.</p>
+
+    <hr>
+
+    <h2>🌌 VISION</h2>
+    <p>To establish a fully integrated civilization framework extending beyond Earth limitations.</p>
+
+    <hr>
+
+    <h2>⚙️ VALUES</h2>
+    <ol>
+        <li>Systemic Integration</li>
+        <li>Scalable Architecture</li>
+        <li>Cross-Domain Engineering</li>
+        <li>Intelligence-Driven Design</li>
+        <li>Spatial Extension Principle</li>
+        <li>Long-Term Civilization Engineering</li>
+    </ol>
+
+    <hr>
+
+    <h3>✍🏼 SIGNATURE</h3>
+    PROF DR JESSE JESSEN<br>
+    FOUNDER · DIRECTOR · MASTER ARCHITECT<br>
+    ALL RIGHTS RESERVED. 2026.
+    
+    <br>
+    <br>
+    
+        <div style="display:flex; align-items:flex-start; gap:10px;">
+        <img src="https://i.ibb.co/Sw6KrsXF/ALPHA-NATION-PARALLEL-INDUSTRIES-220.jpg" 
+             alt="Parallel Industries 220 Logo" 
+             style="width:150px; height:auto; flex-shrink:0; border:0;">
+    </div>
+    `;
+}
+
+else if(sec==="CONTACT"){
+    content.innerHTML=`
+    <div style="text-align:center">
+        <h2>CONTACT PARALLEL INDUSTRIES 220</h2>
+        <p>Securely send us a message to <span class="highlight-email">parallelindustries220391@gmail.com</span> using the form below. Your email is never exposed.</p>
+
+        <form id="contactForm" action="https://formspree.io/f/mlgaddzq" method="POST" style="max-width:500px;margin:0 auto;text-align:left;">
+          <label style="display:block;margin-top:10px;">Name</label>
+          <input type="text" name="name" required style="width:100%;padding:8px;background:#000;color:#00ff66;border:1px solid #00ff66;">
+          
+          <label style="display:block;margin-top:10px;">Email</label>
+          <input type="email" name="_replyto" required style="width:100%;padding:8px;background:#000;color:#00ff66;border:1px solid #00ff66;">
+          
+          <label style="display:block;margin-top:10px;">Message</label>
+          <textarea name="message" required style="width:100%;padding:8px;background:#000;color:#00ff66;border:1px solid #00ff66;" rows="6"></textarea>
+          
+          <button type="submit" style="margin-top:10px;padding:10px 20px;background:#00ff66;color:#000;border:none;cursor:pointer;">Send Message</button>
+          
+          <p id="formStatus" style="margin-top:10px;color:#00ff66;"></p>
+          
+      <!-- DATA PROTECTION STATEMENT -->
+        <p style="margin-top:20px;font-size:0.9em;color:#00ff66;">
+          Your data and information is securely processed and stored in compliance with international privacy standards and native corporation data protection laws (GDPR, CCPA). ― Parallel Industries 220 guarantees your personal information will never be shared without your explicit consent and authorization. All Rights Reserved. 2026.
+</p>
+      
+        </form>
+    </div>
+    `;
+
+    // Attach the form submit handler
+    const form = document.getElementById("contactForm");
+    form.addEventListener("submit", async function(e){
+        e.preventDefault();
+        const status = document.getElementById("formStatus");
+        const data = new FormData(form);
+        const name = data.get("name");
+        const email = data.get("_replyto");
+        const message = data.get("message");
+
+        try {
+            const response = await fetch(form.action, {
+                method: form.method,
+                body: data,
+                headers: { 'Accept': 'application/json' }
+            });
+
+            if(response.ok){
+                status.textContent = "✅ Message sent successfully!";
+                form.reset();
+
+                // Log to console
+                logWithGlyphs(`CONTACT FORM → Name: ${name}, Email: ${email}`);
+                logWithGlyphs(`Message Preview: ${message.slice(0,50)}...`);
+            } else {
+                status.textContent = "⚠ Error sending message. Try again.";
+                logWithGlyphs(`⚠ CONTACT FORM ERROR → Name: ${name}, Email: ${email}`);
+            }
+        } catch(err){
+            status.textContent = "⚠ Network error. Try again.";
+            logWithGlyphs(`⚠ CONTACT FORM NETWORK ERROR → Name: ${name}, Email: ${email}`);
+        }
+    });
+}
+
+else if(sec==="PASSPORT"){
+content.innerHTML=`
+<h2>ALIEN PASSPORT MATRIX ENGINE</h2>
+
+<input id="name" placeholder="NAME">
+<input id="birth" placeholder="BIRTH">
+<input id="serial" placeholder="SERIAL">
+<input id="date" placeholder="DATE">
+<input id="location" placeholder="LOCATION">
+
+<button onclick="runAlienGame()">GENERATE PASSPORT</button>
+
+<pre id="out"></pre>
+<div id="gridBox"></div>
+`;
+
+initGame();
+}
+};
+
+/* ================= GAME ENGINE (FIXED FRAMEBUFFER) ================= */
+function initGame(){
+
+window.runAlienGame = async function(){
+
+const W=30,H=30;
+const SYMBOLS=["◉","▲","◆","▼","■","∞","✦","✧","⬢","⬡"];
+
+const name=document.getElementById("name").value||"NULL";
+const birth=document.getElementById("birth").value||"NULL";
+const serial=document.getElementById("serial").value||"NULL";
+const date=document.getElementById("date").value||"NULL";
+const loadSection=document.getElementById("location").value||"NULL";
+
+async function sha256(str){
+const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(str));
+return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+
+const digest=await sha256(name+birth+serial);
+const coreID="PI220-"+digest.slice(0,14).toUpperCase();
+
+/* GRID */
+let grid=Array.from({length:H},()=>Array(W).fill(" "));
+
+/* TOP PANEL */
+const topPanel=[
+"PRIVATE EVENT",
+""
+];
+
+for(let y=0;y<topPanel.length;y++){
+for(let x=0;x<topPanel[y].length;x++){
+if(x<W) grid[y][x]=topPanel[y][x];
+}
+}
+
+/* BOTTOM PANEL */
+const bottomPanel=[
+"",
+"",
+"",
+"ALIEN PASSPORT"
+];
+
+for(let y=0;y<bottomPanel.length;y++){
+for(let x=0;x<bottomPanel[y].length;x++){
+grid[H-4+y][x]=bottomPanel[y][x];
+}
+}
+
+/* SYMBOL FIELD */
+let i=0;
+function pick(){
+let v=parseInt(digest.substr((i++%digest.length),2),16);
+return SYMBOLS[v%SYMBOLS.length];
+}
+
+for(let y=0;y<H;y++){
+for(let x=0;x<W;x++){
+if(y<4&&x<18) continue;
+if(y>H-5&&x<18) continue;
+grid[y][x]=pick();
+}
+}
+
+/* RENDER */
+const box=document.getElementById("gridBox");
+box.innerHTML="";
+
+for(let y=0;y<H;y++){
+for(let x=0;x<W;x++){
+
+const d=document.createElement("div");
+d.className="cell";
+
+if((y<4&&x<18)||(y>H-5&&x<18)){
+d.classList.add("panel");
+}
+
+d.textContent=grid[y][x];
+box.appendChild(d);
+}
+}
+
+document.getElementById("out").innerText=
+"CORE ID: "+coreID+"\nHASH: "+digest.slice(0,32);
+
+}
+};
+
+/* PROJECT VIEW */
+window.openProject=function(i){
+let p=projects[i];
+content.innerHTML=`
+<h2>${p.name}</h2>
+<p><b>${p.serial}</b></p>
+<h3>ARCHITECTURE</h3><p>${p.architecture}</p>
+<h3>PRINCIPLES</h3><p>${p.principles}</p>
+<h3>SUBSYSTEMS</h3><p>${p.subsystems}</p>
+<h3>FLOW</h3><p>${p.flow}</p>
+<h3>INPUT/OUTPUT</h3><p>${p.io}</p>
+<h3>INTEGRATION</h3><p>${p.integration}</p>
+<h3>VALUE</h3><p>${p.value}</p>
+<button onclick="loadSection('PROJECTS')">BACK</button>
+`;
+};
+
+/* =========================
+   🔐 DATA LAYER — PHASE 2
+========================= */
+
+let dataLayerInterval = null;
+let dataLayerActive = false;
+let dataLayerMode = "normal";
+
+/* START */
+function startDataLayer(mode="normal"){
+
+if(dataLayerActive){
+log("DATA LAYER ALREADY ACTIVE");
+return;
+}
+
+dataLayerActive = true;
+dataLayerMode = mode;
+
+log("DATA LAYER ACTIVATED [" + mode.toUpperCase() + "]");
+
+/* REAL NETWORK INFO */
+if(navigator.connection){
+log("NETWORK: " + navigator.connection.effectiveType);
+log("DOWNLINK: " + navigator.connection.downlink + " Mbps");
+}
+
+/* PUBLIC IP */
+fetch("https://api.ipify.org?format=json")
+.then(res=>res.json())
+.then(d=>log("IP: " + d.ip))
+.catch(()=>log("IP FETCH FAILED"));
+
+/* LOOP */
+dataLayerInterval = setInterval(runDataLayer, 2000);
+}
+
+/* STOP */
+function stopDataLayer(){
+if(dataLayerInterval){
+clearInterval(dataLayerInterval);
+dataLayerInterval = null;
+dataLayerActive = false;
+log("DATA LAYER STOPPED");
+}
+}
+
+/* CORE ENGINE */
+function runDataLayer(){
+
+let cpu = (Math.random()*60+20).toFixed(2);
+let packets = Math.floor(Math.random()*500+100);
+
+const protocols = ["HTTP","HTTPS","TCP","UDP","DNS","QUIC"];
+let proto = protocols[Math.floor(Math.random()*protocols.length)];
+
+const services = ["CORE","AI","NODE","AUTH","SYNC","GRID"];
+let svc = services[Math.floor(Math.random()*services.length)];
+
+/* NORMAL MODE */
+if(dataLayerMode === "normal"){
+log("CPU " + cpu + "% | PKT " + packets + "/s | " + proto + " | " + svc);
+}
+
+/* DEEP MODE */
+if(dataLayerMode === "deep"){
+let ports = [21,22,80,443,8080,3306];
+let port = ports[Math.floor(Math.random()*ports.length)];
+
+log(
+"DEEP SCAN → " +
+"CPU " + cpu + "% | " +
+"PORT " + port + " OPEN | " +
+proto + " | " + svc
+);
+}
+
+/* TRACE MODE */
+if(dataLayerMode === "trace"){
+let latency = (Math.random()*100).toFixed(1);
+
+log(
+"TRACE → " +
+"LAT " + latency + "ms | " +
+proto + " PACKET FLOW | NODE:" + Math.floor(Math.random()*50)
+);
+}
+
+/* AI MODE */
+if(dataLayerMode === "ai"){
+
+let anomaly = Math.random();
+
+if(anomaly > 0.85){
+log("⚠ AI ALERT → ANOMALY DETECTED IN " + proto + " STREAM");
+}else{
+log("AI MONITOR → STABLE | CPU " + cpu + "%");
+}
+
+}
+}
+
+/* COMMAND SYSTEM */
+window.runCommand=function(e){
+if(e.key!=="Enter")return;
+
+let cmd=e.target.value.trim().toLowerCase();
+
+if(cmd==="/help"){
+log("NAVIGATION: /home /projects /about /contact /passport");
+log("COMMANDS: /help /log /status /ping /list -all /open id <serial> /datalayer /datalayer deep /datalayer trace /datalayer ai /datalayer stop ");
+log("SECURITY TIERS: 0-5");
+
+}
+
+else if(cmd==="/log"){systemInfo();}
+else if(cmd==="/list -all"){
+projects.forEach(p=>log(p.name+" | "+p.serial));
+  
+}
+
+else if(cmd.startsWith("/open id ")){
+let s=cmd.replace("/open id ","").toUpperCase();
+let i=projects.findIndex(p=>p.serial===s);
+if(i!==-1) openProject(i);
+else log("NOT FOUND");
+}
+
+  
+
+
+else if(cmd==="/home")loadSection("HOME");
+else if(cmd==="/projects")loadSection("PROJECTS");
+else if(cmd==="/about")loadSection("ABOUT");
+else if(cmd==="/contact")loadSection("CONTACT");
+else if(cmd==="/passport")loadSection("PASSPORT");
+
+
+/* DATA LAYER PHASE 2 */
+
+else if(cmd==="/datalayer"){
+startDataLayer("normal");
+}
+
+else if(cmd==="/datalayer deep"){
+startDataLayer("deep");
+}
+
+else if(cmd==="/datalayer trace"){
+startDataLayer("trace");
+}
+
+else if(cmd==="/datalayer ai"){
+startDataLayer("ai");
+}
+
+else if(cmd==="/datalayer stop"){
+stopDataLayer();
+}
+
+else log("UNKNOWN COMMAND");
+
+e.target.value="";
+};
+/* ================================
+   PI220 ADD-ON MODULE LAYER
+================================ */
+
+const _loadSection = window.loadSection;
+const _runCommand = window.runCommand;
+
+/* EXTENDED SECTIONS */
+window.loadSection = function(sec){
+
+if(sec === "SECURITY"){
+content.innerHTML = `<h2>SECURITY MATRIX</h2>`;
+return;
+}
+
+if(sec === "NETWORK"){
+content.innerHTML = `<h2>NETWORK LAYER</h2>`;
+return;
+}
+
+if(sec === "SETTINGS"){
+content.innerHTML = `<h2>SETTINGS PANEL</h2>`;
+return;
+}
+
+return _loadSection(sec);
+};
+
+/* EXTENDED COMMANDS */
+window.runCommand = function(e){
+if(e.key !== "Enter") return;
+
+let cmd = e.target.value.trim().toLowerCase();
+
+if(cmd === "/security") loadSection("SECURITY");
+else if(cmd === "/network") loadSection("NETWORK");
+else if(cmd === "/settings") loadSection("SETTINGS");
+else if(cmd === "/ping") log("PARALLEL INDUSTRIES 220:391 SERVERS 127.0.0.1 RESPONSE OK");
+else if(cmd === "/status") log("ALL PI220 SYSTEMS OPERATIONAL");
+else return _runCommand(e);
+
+e.target.value="";
+};
+
+});
+</script>
+
+
+</body>
+</html>
