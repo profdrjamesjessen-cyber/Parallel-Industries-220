@@ -199,6 +199,40 @@ body {
         max-height: 180px;
     }
 }
+
+#pi220-root {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 2147483647;
+    pointer-events: none;
+}
+
+#score-display {
+    position: fixed;
+    top: 8px;
+    right: 10px;
+
+    font-family: monospace;
+    font-size: 12px;
+    color: #00ff66;
+
+    background: rgba(0,0,0,0.6);
+    border: 1px solid #00ff66;
+    padding: 4px 8px;
+
+    pointer-events: none;
+}
+
+#particle {
+    position: fixed;
+    font-size: 90px;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+}
+
 </style>
 </head>
 
@@ -224,6 +258,11 @@ body {
 <div id="consolePanel"></div>
 
 <input id="commandInput" placeholder="> /help" onkeydown="runCommand(event)">
+
+<div id="pi220-root">
+    <div id="particle"></div>
+    <div id="score-display"></div>
+</div>
 
 </div>
 
@@ -356,6 +395,12 @@ systemInfo();
 log("SYSTEM ONLINE");
 }
 },600);
+
+setTimeout(function(){
+    updateEnergy();
+    spawnParticle();
+    setInterval(spawnParticle, 15000); // later you can change to 30 min
+}, 2000);
 
 /* LOGO */
 const LOGO_URL="https://i.ibb.co/2104y6QV/391-PARALLEL-INDUSTRIES-220-LEGAL-EXECUTIONS.jpg";
@@ -988,9 +1033,102 @@ else return _runCommand(e);
 e.target.value="";
 };
 
+/* ALIEN GAME */
+
+let energy = 0;
+let particleActive = false;
+
+function updateEnergy(){
+    const el = document.getElementById("score-display");
+    if(el){
+        el.textContent = "ENERGY: " + energy + " MW";
+    }
+}
+
+const particles = [
+    { symbol: "✦", name: "ELECTRON READY", value: 100 },
+    { symbol: "✧", name: "ELECTRON", value: 50 },
+    { symbol: "⬢", name: "PHOTON EXCITED", value: 200 },
+    { symbol: "⬡", name: "PHOTON", value: 100 }
+];
+
+const energyTips = [
+    "High-frequency photons increase total yield.",
+    "Electron readiness improves capture efficiency.",
+    "Quantum drift affects particle stability.",
+    "Excited states decay rapidly — act fast.",
+    "Energy capture optimized under dynamic fields."
+];
+
+function spawnParticle(){
+
+    if (particleActive) return;
+
+    const el = document.getElementById("particle");
+    if (!el) return;
+
+    particleActive = true;
+
+    let x = Math.random() * window.innerWidth;
+    let y = Math.random() * window.innerHeight;
+
+    const p = particles[Math.floor(Math.random() * particles.length)];
+    const tip = energyTips[Math.floor(Math.random() * energyTips.length)];
+
+    el.textContent = p.symbol;
+
+    // ✅ USE YOUR ORIGINAL CONSOLE
+    log("QUANTUM PARTICLE DETECTED: " + p.name);
+    log("ENERGY VALUE: +" + p.value + " MW");
+    log("TIP: " + tip);
+
+    function move(){
+        if (!particleActive) return;
+
+        x += (Math.random() - 0.5) * 160;
+        y += (Math.random() - 0.5) * 160;
+
+        x = Math.max(0, Math.min(window.innerWidth - 100, x));
+        y = Math.max(0, Math.min(window.innerHeight - 100, y));
+
+        el.style.left = x + "px";
+        el.style.top = y + "px";
+
+        setTimeout(move, 120);
+    }
+
+    move();
+
+    // CLICK EVENT
+    el.onclick = () => {
+        if (!particleActive) return;
+
+        particleActive = false;
+
+        energy += p.value;
+        updateEnergy();
+
+        el.textContent = "";
+
+        log("ENERGY CAPTURED: +" + p.value + " MW | TOTAL: " + energy + " MW");
+    };
+
+    // TIMEOUT
+    setTimeout(() => {
+        if (!particleActive) return;
+
+        particleActive = false;
+        el.textContent = "";
+
+        log("WARNING: PARTICLE LOST");
+    }, 5000);
+}
+
+
 });
 </script>
 
 
 </body>
 </html>
+
