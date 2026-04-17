@@ -351,25 +351,61 @@ function logWithGlyphs(text){
 
 /* SYSTEM INFO */
 function systemInfo(){
-let now=new Date();
+    let now = new Date();
 
-log("WELCOME TO PARALLEL INDUSTRIES 220 CORPORATION");
-log("SUBSIDIARY PUBLIC SYSTEM");
-log("UNDER DEVELOPMENT. ALIEN SYNTAX : MATRIX INSTALLED.");
-log("WEBSITE DESIGNED AND UNDER DEVELOPMENT BY PROF DR JESSE JESSEN. 2026.");
+    log("WELCOME TO PARALLEL INDUSTRIES 220 CORPORATION");
+    log("SUBSIDIARY PUBLIC SYSTEM");
+    log("UNDER DEVELOPMENT. ALIEN SYNTAX : MATRIX INSTALLED.");
+    log("WEBSITE DESIGNED AND UNDER DEVELOPMENT BY PROF DR JESSE JESSEN. 2026.");
 
-log("DATE: "+now.toLocaleDateString());
-log("TIME: "+now.toLocaleTimeString());
-log("YEAR: "+now.getFullYear());
+    log("DATE: " + now.toLocaleDateString());
+    log("TIME: " + now.toLocaleTimeString());
+    log("YEAR: " + now.getFullYear());
 
-log("PLATFORM: "+navigator.platform);
-log("LANGUAGE: "+navigator.language);
+    log("PLATFORM: " + navigator.platform);
+    log("LANGUAGE: " + navigator.language);
 
-if(navigator.geolocation){
-navigator.geolocation.getCurrentPosition(pos=>{
-log("LOCATION: LAT "+pos.coords.latitude.toFixed(2)+" / LON "+pos.coords.longitude.toFixed(2));
-});
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(pos=>{
+            log("LOCATION: LAT " + pos.coords.latitude.toFixed(2) +
+                " / LON " + pos.coords.longitude.toFixed(2));
+        });
+    }
+
+    log("QUANTUM ENERGY MODULE: ACTIVE");
+    log("GRID STATUS: STANDBY");
+
+    // ⏱️ DELAYED MISSION DIRECTIVE (FIXED)
+    setTimeout(function(){
+        showMissionDirective();
+    }, 8000);
 }
+
+function showMissionDirective(){
+
+    log(" ");
+    log("████████████████████████████████████");
+    log("SYSTEM DIRECTIVE DETECTED");
+    log(" ");
+
+    log("OBJECTIVE: QUANTUM ENERGY ACCUMULATION");
+    log("TARGET: 2000 MW");
+
+    log("REWARD: TOP SECRET ACCESS");
+    log("STATUS: LOCKED");
+
+    log(" ");
+    log("DESCRIPTION:");
+    log("Accumulate quantum energy through particle capture.");
+    log("Reach threshold to unlock classified PI220 systems.");
+
+    log(" ");
+    log("NOTE:");
+    log("Higher-value particles accelerate progression.");
+    log("Excited photon states yield maximum output.");
+
+    log(" ");
+    log("████████████████████████████████████");
 }
 
 /* BOOT */
@@ -1077,8 +1113,9 @@ function spawnParticle(){
 
     el.textContent = p.symbol;
 
-    // ✅ USE YOUR ORIGINAL CONSOLE
+    // CONSOLE LOGS
     log("QUANTUM PARTICLE DETECTED: " + p.name);
+    log("CLASS: " + p.type);
     log("ENERGY VALUE: +" + p.value + " MW");
     log("TIP: " + tip);
 
@@ -1099,7 +1136,6 @@ function spawnParticle(){
 
     move();
 
-    // CLICK EVENT
     el.onclick = () => {
         if (!particleActive) return;
 
@@ -1110,10 +1146,18 @@ function spawnParticle(){
 
         el.textContent = "";
 
+        log("CAPTURE SUCCESS: " + p.type + " HARVESTED");
         log("ENERGY CAPTURED: +" + p.value + " MW | TOTAL: " + energy + " MW");
+
+        if (energy < 2000) {
+            log("PROGRESS: " + energy + " / 2000 MW");
+        }
+
+        if (energy >= 1500 && energy < 2000) {
+            log("WARNING: APPROACHING CLASSIFIED THRESHOLD");
+        }
     };
 
-    // TIMEOUT
     setTimeout(() => {
         if (!particleActive) return;
 
@@ -1123,6 +1167,12 @@ function spawnParticle(){
         log("WARNING: PARTICLE LOST");
     }, 5000);
 }
+
+setTimeout(function(){
+    updateEnergy();
+    spawnParticle();
+    setInterval(spawnParticle, 15000);
+}, 2000);
 
 
 });
