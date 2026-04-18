@@ -233,6 +233,26 @@ body {
     user-select: none;
 }
 
+#pctmSplit{
+    display:flex;
+    gap:10px;
+}
+
+.pctm-left, .pctm-right{
+    width:50%;
+    padding:10px;
+    border:1px solid #00ff66;
+    min-height:420px;
+}
+
+.matrixBlock{
+    border:1px solid #00ff66;
+    padding:8px;
+    margin:8px 0;
+    font-size:12px;
+    background:#000;
+}
+
 </style>
 </head>
 
@@ -262,6 +282,7 @@ body {
 <div id="pi220-root">
     <div id="particle"></div>
     <div id="score-display"></div>
+
 </div>
 
 </div>
@@ -387,24 +408,15 @@ function showMissionDirective(){
     log("████████████████████████████████████");
     log("SYSTEM DIRECTIVE DETECTED");
     log(" ");
-
     log("OBJECTIVE: QUANTUM ENERGY ACCUMULATION");
     log("TARGET: 2000 MW");
-
     log("REWARD: TOP SECRET ACCESS");
     log("STATUS: LOCKED");
-
     log(" ");
     log("DESCRIPTION:");
     log("Accumulate quantum energy through particle capture.");
     log("Reach threshold to unlock classified PI220 systems.");
-
-    log(" ");
-    log("NOTE:");
-    log("Higher-value particles accelerate progression.");
-    log("Excited photon states yield maximum output.");
-
-    log(" ");
+    log("/network PCTM activated")
     log("████████████████████████████████████");
 }
 
@@ -970,7 +982,7 @@ if(e.key!=="Enter")return;
 let cmd=e.target.value.trim().toLowerCase();
 
 if(cmd==="/help"){
-log("NAVIGATION: /home /projects /about /contact /passport");
+log("NAVIGATION: /home /projects /about /contact /passport /network");
 log("COMMANDS: /help /log /status /ping /list -all /open id <serial> /datalayer /datalayer deep /datalayer trace /datalayer ai /datalayer stop ");
 log("SECURITY TIERS: 0-5");
 
@@ -1040,10 +1052,184 @@ content.innerHTML = `<h2>SECURITY MATRIX</h2>`;
 return;
 }
 
+window.loadSection = function(sec){
+
 if(sec === "NETWORK"){
-content.innerHTML = `<h2>NETWORK LAYER</h2>`;
+
+content.innerHTML = `
+<h2>NETWORK LAYER — PCTM SCADA CONTROL MATRIX</h2>
+
+<div id="pctmSplit">
+    <div class="pctm-left" id="leftPanel"></div>
+    <div class="pctm-right" id="rightPanel"></div>
+</div>
+`;
+
+setTimeout(() => {
+    PCTM.start();
+}, 0);
+
 return;
 }
+
+return _loadSection(sec);
+};
+
+const PCTM = {
+
+nodes: [
+    { id:"A01", name:"Phoenix Core Node", lat:33.45, lon:-112.07, tz:"America/Phoenix" },
+    { id:"A02", name:"Tucson Auxiliary Node", lat:32.22, lon:-110.97, tz:"America/Phoenix" },
+    { id:"A03", name:"Flagstaff Thermal Node", lat:35.19, lon:-111.65, tz:"America/Phoenix" }
+],
+
+time(tz){
+    return new Date().toLocaleString("en-US", { timeZone: tz });
+},
+
+async weather(lat, lon){
+
+    try{
+        const r = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`
+        );
+
+        const d = await r.json();
+
+        return {
+            temp: d?.current_weather?.temperature ?? 40,
+            wind: d?.current_weather?.windspeed ?? 5
+        };
+
+    }catch(e){
+        return { temp: 40, wind: 5 };
+    }
+},
+
+plant(w){
+
+    // INPUT
+    const solarIn = 820 + Math.random()*120;
+
+    // PCTM500 (solar + chemical)
+    const p500_out = solarIn * 0.74;
+
+    // PCTM5000 (hydrogen processing)
+    const h2_out = p500_out * 0.65 * 0.86;
+
+    // PCTM10000-X (photonic reactor)
+    const inject = h2_out * 0.92;
+    const p10000_out = inject * 0.92;
+
+    // PCEEP (electric extraction)
+    const electricity = p10000_out * 1.15;
+    const hydrogen = h2_out * 0.35;
+
+    // THERMAL MODEL
+    const coreTemp = w.temp + (p10000_out * 7);
+    const cooling = coreTemp * 0.63;
+
+    // ECONOMY MODEL
+    const revenue = (electricity * 125) + (hydrogen * 320);
+
+    return {
+        solarIn,
+        p500_out,
+        h2_out,
+        p10000_out,
+        electricity,
+        hydrogen,
+        coreTemp,
+        cooling,
+        revenue
+    };
+},
+
+safe(id, html){
+    const el = document.getElementById(id);
+    if(el) el.innerHTML = html;
+},
+
+async render(){
+
+    let left = "";
+    let right = "";
+
+    let totalEnergy = 0;
+    let totalRevenue = 0;
+
+    for(let i=0;i<this.nodes.length;i++){
+
+        const n = this.nodes[i];
+        const w = await this.weather(n.lat, n.lon);
+        const p = this.plant(w);
+
+        totalEnergy += p.electricity;
+        totalRevenue += p.revenue;
+
+        const block = `
+<div class="matrixBlock">
+<b>${n.id} — ${n.name}</b><br><br>
+
+🌡 Core Temp: ${p.coreTemp.toFixed(1)}°C<br>
+❄ Cooling: ${p.cooling.toFixed(1)}°C<br><br>
+
+☀️ PCTM500 Output: ${p.p500_out.toFixed(2)} MW<br>
+💧 Hydrogen: ${p.h2_out.toFixed(2)} kg<br><br>
+
+⚛ PCTM10000-X: ${p.p10000_out.toFixed(2)} MW<br><br>
+
+⚡ Electricity: ${p.electricity.toFixed(2)} MW<br>
+🔋 Hydrogen Refined: ${p.hydrogen.toFixed(2)} kg<br><br>
+
+💰 Revenue: €${p.revenue.toFixed(2)} / hr
+</div>
+`;
+
+        if(i % 2 === 0) left += block;
+        else right += block;
+    }
+
+    this.safe("leftPanel", `
+<h3>NODE CLUSTER A</h3>
+${left}
+`);
+
+    this.safe("rightPanel", `
+<h3>GLOBAL SCADA MATRIX</h3>
+
+<div class="matrixBlock">
+⚡ TOTAL ENERGY: ${totalEnergy.toFixed(2)} MW
+</div>
+
+<div class="matrixBlock">
+💰 TOTAL REVENUE: €${totalRevenue.toFixed(2)} / hr
+</div>
+
+<div class="matrixBlock">
+📊 STATUS: STABLE
+</div>
+
+<div class="matrixBlock">
+🧠 MODE: DIGITAL TWIN ACTIVE
+</div>
+`);
+},
+
+interval: null,
+
+start(){
+
+    if(this.interval) clearInterval(this.interval);
+
+    this.render();
+
+    this.interval = setInterval(() => {
+        this.render();
+    }, 2000);
+}
+
+};
 
 if(sec === "SETTINGS"){
 content.innerHTML = `<h2>SETTINGS PANEL</h2>`;
